@@ -1,4 +1,5 @@
 import 'package:chat_app/consts.dart';
+import 'package:chat_app/models/chat.dart';
 import 'package:chat_app/models/message.dart';
 import 'package:chat_app/models/user_profile.dart';
 import 'package:chat_app/services/auth_service.dart';
@@ -51,14 +52,24 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildUI() {
-    return currentUser != null
-        ? DashChat(
-            inputOptions: const InputOptions(alwaysShowSend: true),
-            currentUser: currentUser!,
-            onSend: _sendMessage,
-            messages: [],
-          )
-        : Center(child: CircularProgressIndicator());
+    return StreamBuilder(
+        stream: _db.getChatData(currentUser!.id, otherUser!.id),
+        builder: (context, snapshot) {
+          Chat? chat = snapshot.data!.data();
+          List<ChatMessage> messages = [];
+
+          if (chat != null && chat.messages != null) {
+            messages = generateChatMessagesList(chat.messages!);
+          }
+          return currentUser != null
+              ? DashChat(
+                  inputOptions: const InputOptions(alwaysShowSend: true),
+                  currentUser: currentUser!,
+                  onSend: _sendMessage,
+                  messages: messages,
+                )
+              : Center(child: CircularProgressIndicator());
+        });
   }
 
   Future<void> _sendMessage(ChatMessage chatMessage) async {
@@ -68,5 +79,18 @@ class _ChatPageState extends State<ChatPage> {
         messageType: MessageType.Text,
         sentAt: Timestamp.fromDate(chatMessage.createdAt));
     await _db.sendMessage(currentUser!.id, otherUser!.id, message);
+  }
+
+  List<ChatMessage> generateChatMessagesList(List<Message> messages) {
+    List<ChatMessage> chatMessages = messages.map((m) {
+      return ChatMessage(
+          user: m.senderID == currentUser!.id ? currentUser! : otherUser!,
+          text: m.content!,
+          createdAt: m.sentAt!.toDate());
+    }).toList();
+    chatMessages.sort((a, b){
+      return b.createdAt.compareTo(a.createdAt);
+    });
+    return chatMessages;
   }
 }
